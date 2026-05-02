@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Climate Analyzer — Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c0f;--surface:#111418;--surface2:#181c22;
+  --border:#1e2530;--border2:#252d3a;--text:#e8edf5;--muted:#5a6478;--muted2:#3a4255;
+  --accent:#4af0a8;--accent2:#0ef7ff;--warn:#f0a84a;--danger:#f05a5a;
+  --fh:'Syne',sans-serif;--fm:'DM Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--fm);-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.fu{animation:fadeUp .4s ease both}
+.fu1{animation-delay:.08s}.fu2{animation-delay:.16s}.fu3{animation-delay:.24s}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<script type="text/babel">
+
+const { useState, useRef, useEffect } = React;
+const {
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer
+} = Recharts;
+
+const PALETTE = ['#4af0a8','#0ef7ff','#f0a84a','#f05a9a','#a84af0','#f0e84a'];
+
+const MOCK = {
+  best_city: "Guadalajara",
+  ranking: ["Guadalajara","Monterrey","Ciudad de México","Tijuana","Mérida"],
+  summary: "Analizadas 5 ciudades. Mejor opción: Guadalajara (74.2/100). Menor score: Mérida (38.1/100). Score operacional = 50% confort + 50% estabilidad, con penalización por lluvia frecuente.",
+  errors: [],
+  results: [
+    {city_name:"Guadalajara",country:"MX",lat:20.67,lon:-103.35,current_temp:22.4,current_feels_like:22.1,current_condition:"Cielos despejados",current_icon:"01d",current_humidity:48,current_wind_kph:14.4,temp_avg_max:26.8,temp_avg_min:14.2,temp_variance:15.2,rain_days:1,total_forecast_days:5,rain_days_pct:20,extreme_days:0,humidity_avg:52,comfort_index:82.5,stability_index:65.9,operational_score:74.2,verdict:"Excelente",recommendation:"Guadalajara es una opción muy favorable para operaciones. Temperatura muy estable: excelente para planning de inventario."},
+    {city_name:"Monterrey",country:"MX",lat:25.67,lon:-100.31,current_temp:28.1,current_feels_like:30.4,current_condition:"Parcialmente nublado",current_icon:"02d",current_humidity:61,current_wind_kph:18.0,temp_avg_max:32.4,temp_avg_min:19.8,temp_variance:22.8,rain_days:2,total_forecast_days:5,rain_days_pct:40,extreme_days:1,humidity_avg:65,comfort_index:64.8,stability_index:63.4,operational_score:64.1,verdict:"Bueno",recommendation:"Monterrey es viable con planificación estándar. 1 día(s) con temperaturas extremas: considera almacenamiento climatizado."},
+    {city_name:"Ciudad de México",country:"MX",lat:19.43,lon:-99.13,current_temp:18.6,current_feels_like:17.8,current_condition:"Nublado",current_icon:"04d",current_humidity:72,current_wind_kph:10.8,temp_avg_max:22.1,temp_avg_min:11.4,temp_variance:19.4,rain_days:3,total_forecast_days:5,rain_days_pct:60,extreme_days:0,humidity_avg:74,comfort_index:61.2,stability_index:58.7,operational_score:55.9,verdict:"Bueno",recommendation:"Ciudad de México es viable con planificación estándar. Alta probabilidad de lluvia (60% de los días): planea inventario impermeable y rutas de entrega alternativas. Humedad elevada: productos sensibles a la humedad requieren embalaje especial."},
+    {city_name:"Tijuana",country:"MX",lat:32.53,lon:-117.04,current_temp:16.2,current_feels_like:14.8,current_condition:"Llovizna",current_icon:"09d",current_humidity:81,current_wind_kph:22.0,temp_avg_max:19.4,temp_avg_min:10.2,temp_variance:24.1,rain_days:3,total_forecast_days:5,rain_days_pct:60,extreme_days:0,humidity_avg:82,comfort_index:49.3,stability_index:57.8,operational_score:49.5,verdict:"Regular",recommendation:"Tijuana presenta desafíos climáticos a considerar. Alta probabilidad de lluvia (60% de los días). Humedad elevada: productos sensibles a la humedad requieren embalaje especial."},
+    {city_name:"Mérida",country:"MX",lat:20.97,lon:-89.62,current_temp:34.8,current_feels_like:38.2,current_condition:"Caluroso y húmedo",current_icon:"01d",current_humidity:88,current_wind_kph:12.6,temp_avg_max:37.2,temp_avg_min:25.8,temp_variance:28.6,rain_days:4,total_forecast_days:5,rain_days_pct:80,extreme_days:3,humidity_avg:88,comfort_index:18.4,stability_index:57.8,operational_score:38.1,verdict:"Difícil",recommendation:"Mérida tiene condiciones difíciles; evalúa bien los costos operativos. Alta probabilidad de lluvia (80% de los días). 3 día(s) con temperaturas extremas: considera almacenamiento climatizado. Humedad elevada: productos sensibles requieren embalaje especial."},
+  ]
+};
+
+const VERDICT_META = {
+  Excelente:{color:'#4af0a8',emoji:'✦'},
+  Bueno:    {color:'#f0d44a',emoji:'◈'},
+  Regular:  {color:'#f0a84a',emoji:'◇'},
+  Difícil:  {color:'#f05a5a',emoji:'✕'},
+};
+
+function scoreColor(s){
+  if(s>=75)return'#4af0a8';
+  if(s>=55)return'#f0d44a';
+  if(s>=35)return'#f07a4a';
+  return'#f05a5a';
+}
+function fmt1(n){return typeof n==='number'?n.toFixed(1):n}
+
+function ScoreBar({value,label,delay=0}){
+  const c=scoreColor(value);
+  const [w,setW]=useState(0);
+  useEffect(()=>{const t=setTimeout(()=>setW(value),100+delay);return()=>clearTimeout(t)},[value]);
+  return(
+    <div style={{marginBottom:10}}>
+      <div style={{display:'flex',justifyContent:'space-between',marginBottom:4,fontSize:11}}>
+        <span style={{color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.05em'}}>{label}</span>
+        <span style={{color:c,fontWeight:500}}>{fmt1(value)}</span>
+      </div>
+      <div style={{height:4,background:'var(--border)',borderRadius:2,overflow:'hidden'}}>
+        <div style={{height:'100%',width:`${w}%`,background:c,borderRadius:2,transition:'width .8s cubic-bezier(.4,0,.2,1)'}}/>
+      </div>
+    </div>
+  );
+}
+
+function Chip({children,color}){
+  return(
+    <span style={{display:'inline-block',padding:'2px 8px',borderRadius:3,
+      background:color+'18',color,border:`1px solid ${color}44`,
+      fontSize:11,fontWeight:500,letterSpacing:'.03em'}}>
+      {children}
+    </span>
+  );
+}
+
+function CityCard({city,rank,color,isBest}){
+  const vm=VERDICT_META[city.verdict]||VERDICT_META['Regular'];
+  return(
+    <div className="fu" style={{
+      background:isBest?`linear-gradient(135deg,${color}10,var(--surface))`:'var(--surface)',
+      border:`1px solid ${isBest?color+'55':'var(--border)'}`,
+      borderRadius:12,padding:'22px 20px',position:'relative',
+    }}>
+      <div style={{position:'absolute',top:14,right:16,
+        fontFamily:'var(--fh)',fontWeight:800,fontSize:32,
+        color:color+'22',lineHeight:1,userSelect:'none'}}>
+        {String(rank).padStart(2,'0')}
+      </div>
+      <div style={{marginBottom:16}}>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+          <div style={{width:8,height:8,borderRadius:'50%',background:color,flexShrink:0}}/>
+          <span style={{fontFamily:'var(--fh)',fontWeight:700,fontSize:19,lineHeight:1}}>{city.city_name}</span>
+          <Chip color={vm.color}>{vm.emoji} {city.verdict}</Chip>
+        </div>
+        <div style={{fontSize:11,color:'var(--muted)',paddingLeft:16}}>{city.country} · {fmt1(city.lat)}°N</div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:14}}>
+        {[
+          {label:'Ahora',value:`${fmt1(city.current_temp)}°C`,sub:`Sensación ${fmt1(city.current_feels_like)}°C`},
+          {label:'Condición',value:city.current_condition,sub:`Humedad ${city.current_humidity}%`},
+          {label:'Viento',value:`${fmt1(city.current_wind_kph)} km/h`,sub:''},
+          {label:'Hum. prom.',value:`${fmt1(city.humidity_avg)}%`,sub:'5 días'},
+        ].map(item=>(
+          <div key={item.label} style={{background:'var(--surface2)',borderRadius:8,padding:'10px 12px'}}>
+            <div style={{fontSize:10,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:3}}>{item.label}</div>
+            <div style={{fontSize:13,fontWeight:500,lineHeight:1.2}}>{item.value}</div>
+            {item.sub&&<div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>{item.sub}</div>}
+          </div>
+        ))}
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:14,
+        background:'var(--surface2)',borderRadius:8,padding:'10px 12px'}}>
+        {[
+          {label:'Máx prom.',value:`${fmt1(city.temp_avg_max)}°C`,color:'var(--warn)'},
+          {label:'Mín prom.',value:`${fmt1(city.temp_avg_min)}°C`,color:'var(--accent2)'},
+          {label:'Días lluvia',value:`${city.rain_days}/${city.total_forecast_days}`,
+           color:city.rain_days_pct>50?'var(--danger)':'var(--muted)'},
+        ].map(s=>(
+          <div key={s.label} style={{textAlign:'center'}}>
+            <div style={{fontSize:15,fontWeight:600,color:s.color}}>{s.value}</div>
+            <div style={{fontSize:10,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.05em'}}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      {city.extreme_days>0&&(
+        <div style={{background:'#f0a84a0d',border:'1px solid #f0a84a33',borderRadius:6,
+          padding:'7px 10px',marginBottom:10,fontSize:11,color:'var(--warn)'}}>
+          ⚠ {city.extreme_days} día(s) con temperatura extrema
+        </div>
+      )}
+      <div style={{marginTop:4}}>
+        <ScoreBar value={city.comfort_index}     label="Confort"       delay={100}/>
+        <ScoreBar value={city.stability_index}   label="Estabilidad"   delay={200}/>
+        <ScoreBar value={city.operational_score} label="Operacional"   delay={300}/>
+      </div>
+      <div style={{marginTop:14,padding:'10px 12px',background:'var(--surface2)',borderRadius:8,
+        fontSize:12,color:'var(--muted)',lineHeight:1.6,borderLeft:`3px solid ${color}`}}>
+        {city.recommendation}
+      </div>
+    </div>
+  );
+}
+
+function RadarComp({cities}){
+  const data=['Confort','Estabilidad','Operacional','Sin Lluvia','Sin Extremos'].map(axis=>{
+    const obj={axis};
+    cities.forEach((c,i)=>{
+      const k=c.city_name+'_'+i;
+      obj[k]=axis==='Confort'?c.comfort_index
+        :axis==='Estabilidad'?c.stability_index
+        :axis==='Operacional'?c.operational_score
+        :axis==='Sin Lluvia'?Math.max(0,100-c.rain_days_pct)
+        :Math.max(0,100-c.extreme_days*20);
+    });
+    return obj;
+  });
+  const ttStyle={background:'var(--surface2)',border:'1px solid var(--border2)',
+    borderRadius:8,fontSize:12,fontFamily:'var(--fm)',color:'var(--text)'};
+  return(
+    <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:12,padding:'20px'}}>
+      <h3 style={{fontFamily:'var(--fh)',fontWeight:700,fontSize:14,marginBottom:4}}>Radar comparativo</h3>
+      <p style={{fontSize:11,color:'var(--muted)',marginBottom:16}}>5 dimensiones · mayor área = mejor opción</p>
+      <ResponsiveContainer width="100%" height={280}>
+        <RadarChart data={data} margin={{top:10,right:30,bottom:10,left:30}}>
+          <PolarGrid stroke="var(--border)"/>
+          <PolarAngleAxis dataKey="axis" tick={{fill:'var(--muted)',fontSize:11,fontFamily:'var(--fm)'}}/>
+          <PolarRadiusAxis angle={30} domain={[0,100]} tick={false} axisLine={false}/>
+          {cities.map((c,i)=>(
+            <Radar key={c.city_name} name={c.city_name} dataKey={c.city_name+'_'+i}
+              stroke={PALETTE[i%PALETTE.length]} fill={PALETTE[i%PALETTE.length]}
+              fillOpacity={0.12} strokeWidth={1.5}/>
+          ))}
+          <Legend wrapperStyle={{fontSize:11,color:'var(--muted)',fontFamily:'var(--fm)'}}/>
+          <Tooltip contentStyle={ttStyle} formatter={(v,n)=>[fmt1(v),n.split('_')[0]]}/>
+        </RadarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function ScoresBars({cities}){
+  const data=cities.map(c=>({
+    name:c.city_name,
+    Confort:c.comfort_index,
+    Estabilidad:c.stability_index,
+    Operacional:c.operational_score,
+  }));
+  const ttStyle={background:'var(--surface2)',border:'1px solid var(--border2)',
+    borderRadius:8,fontSize:12,fontFamily:'var(--fm)',color:'var(--text)'};
+  return(
+    <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:12,padding:'20px'}}>
+      <h3 style={{fontFamily:'var(--fh)',fontWeight:700,fontSize:14,marginBottom:4}}>Scores por ciudad</h3>
+      <p style={{fontSize:11,color:'var(--muted)',marginBottom:16}}>Escala 0–100</p>
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={data} barCategoryGap="30%" barGap={3}>
+          <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" vertical={false}/>
+          <XAxis dataKey="name" tick={{fill:'var(--muted)',fontSize:10,fontFamily:'var(--fm)'}} axisLine={false} tickLine={false}/>
+          <YAxis domain={[0,100]} tick={{fill:'var(--muted)',fontSize:10,fontFamily:'var(--fm)'}} axisLine={false} tickLine={false}/>
+          <Tooltip contentStyle={ttStyle} cursor={{fill:'var(--border)',opacity:.5}}/>
+          <Legend wrapperStyle={{fontSize:11,color:'var(--muted)',fontFamily:'var(--fm)'}}/>
+          <Bar dataKey="Confort"     fill="#4af0a844" stroke="#4af0a8" strokeWidth={1} radius={[3,3,0,0]}/>
+          <Bar dataKey="Estabilidad" fill="#0ef7ff44" stroke="#0ef7ff" strokeWidth={1} radius={[3,3,0,0]}/>
+          <Bar dataKey="Operacional" fill="#f0a84a44" stroke="#f0a84a" strokeWidth={1} radius={[3,3,0,0]}/>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function RankingTable({cities}){
+  const sorted=[...cities].sort((a,b)=>b.operational_score-a.operational_score);
+  const ths=['#','Ciudad','Temp actual','Máx/Mín','Lluvia','Varianza','Confort','Estabilidad','Operacional','Veredicto'];
+  return(
+    <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:12,overflow:'hidden'}}>
+      <div style={{padding:'16px 20px',borderBottom:'1px solid var(--border)'}}>
+        <h3 style={{fontFamily:'var(--fh)',fontWeight:700,fontSize:14}}>Ranking operacional</h3>
+      </div>
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+          <thead>
+            <tr style={{background:'var(--surface2)'}}>
+              {ths.map(h=>(
+                <th key={h} style={{padding:'10px 14px',textAlign:'left',color:'var(--muted)',
+                  fontWeight:500,fontSize:10,textTransform:'uppercase',letterSpacing:'.07em',
+                  whiteSpace:'nowrap',borderBottom:'1px solid var(--border)'}}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((c,i)=>{
+              const vm=VERDICT_META[c.verdict]||VERDICT_META['Regular'];
+              const color=PALETTE[cities.indexOf(c)%PALETTE.length];
+              return(
+                <tr key={c.city_name} style={{borderBottom:'1px solid var(--border)',
+                  background:i===0?`${color}06`:'transparent'}}>
+                  <td style={{padding:'11px 14px',color:'var(--muted)',fontWeight:700}}>
+                    {i===0?'★':i+1}
+                  </td>
+                  <td style={{padding:'11px 14px'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      <div style={{width:6,height:6,borderRadius:'50%',background:color}}/>
+                      <span style={{fontWeight:600,whiteSpace:'nowrap'}}>{c.city_name}</span>
+                    </div>
+                  </td>
+                  <td style={{padding:'11px 14px'}}>{fmt1(c.current_temp)}°C</td>
+                  <td style={{padding:'11px 14px',whiteSpace:'nowrap'}}>
+                    <span style={{color:'var(--warn)'}}>{fmt1(c.temp_avg_max)}°</span>
+                    {' / '}
+                    <span style={{color:'var(--accent2)'}}>{fmt1(c.temp_avg_min)}°</span>
+                  </td>
+                  <td style={{padding:'11px 14px',color:c.rain_days_pct>50?'var(--danger)':'var(--muted)'}}>
+                    {c.rain_days_pct}%
+                  </td>
+                  <td style={{padding:'11px 14px',color:'var(--muted)'}}>{fmt1(c.temp_variance)}</td>
+                  <td style={{padding:'11px 14px'}}>
+                    <span style={{color:scoreColor(c.comfort_index),fontWeight:600}}>{fmt1(c.comfort_index)}</span>
+                  </td>
+                  <td style={{padding:'11px 14px'}}>
+                    <span style={{color:scoreColor(c.stability_index),fontWeight:600}}>{fmt1(c.stability_index)}</span>
+                  </td>
+                  <td style={{padding:'11px 14px'}}>
+                    <span style={{color:scoreColor(c.operational_score),fontWeight:700,fontSize:14}}>{fmt1(c.operational_score)}</span>
+                  </td>
+                  <td style={{padding:'11px 14px'}}>
+                    <Chip color={vm.color}>{vm.emoji} {c.verdict}</Chip>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function App(){
+  const [citiesRaw,setCitiesRaw]=useState('Monterrey, Guadalajara, CDMX, Tijuana, Mérida');
+  const [apiKey,setApiKey]=useState('••••••••••••••••••••••');
+  const [view,setView]=useState('results'); // 'input' | 'loading' | 'results'
+  const data=MOCK;
+
+  return(
+    <div style={{minHeight:'100vh',background:'var(--bg)'}}>
+      {/* Header */}
+      <header style={{borderBottom:'1px solid var(--border)',padding:'0 28px',height:52,
+        display:'flex',alignItems:'center',gap:16,
+        position:'sticky',top:0,zIndex:10,background:'var(--bg)'}}>
+        <span style={{fontSize:16}}>◈</span>
+        <span style={{fontFamily:'var(--fh)',fontWeight:800,fontSize:13,letterSpacing:'.12em',
+          textTransform:'uppercase',
+          background:'linear-gradient(90deg,var(--accent),var(--accent2))',
+          WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>
+          Climate Analyzer
+        </span>
+        <span style={{color:'var(--muted2)',fontSize:12}}>/ herramienta de expansión de negocio</span>
+        <div style={{marginLeft:'auto',fontSize:11,color:'var(--muted2)',
+          background:'var(--surface2)',border:'1px solid var(--border)',
+          borderRadius:20,padding:'4px 12px'}}>
+          ★ Preview con mock data
+        </div>
+      </header>
+
+      <main style={{maxWidth:1100,margin:'0 auto',padding:'40px 20px 80px'}}>
+
+        {/* Hero */}
+        <div className="fu" style={{marginBottom:40}}>
+          <h1 style={{fontFamily:'var(--fh)',fontWeight:800,
+            fontSize:'clamp(24px,4vw,44px)',lineHeight:1.1,marginBottom:14}}>
+            ¿En qué ciudad<br/>conviene operar?
+          </h1>
+          <p style={{color:'var(--muted)',fontSize:13,maxWidth:500,lineHeight:1.7}}>
+            Ingresa las ciudades candidatas. Analizamos temperatura, lluvia,
+            humedad y varianza para darte un <strong style={{color:'var(--text)'}}>score operacional</strong>.
+          </p>
+        </div>
+
+        {/* Form */}
+        <div className="fu fu1" style={{background:'var(--surface)',border:'1px solid var(--border)',
+          borderRadius:14,padding:'24px',marginBottom:32}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:10,marginBottom:12}}>
+            <div>
+              <label style={{display:'block',fontSize:10,color:'var(--muted)',
+                textTransform:'uppercase',letterSpacing:'.1em',marginBottom:5}}>
+                Ciudades (separadas por coma)
+              </label>
+              <input value={citiesRaw} onChange={e=>setCitiesRaw(e.target.value)}
+                style={{width:'100%',background:'var(--surface2)',border:'1px solid var(--border2)',
+                  borderRadius:8,padding:'10px 14px',color:'var(--text)',fontSize:14,outline:'none'}}/>
+            </div>
+            <div style={{display:'flex',alignItems:'flex-end'}}>
+              <button onClick={()=>alert('En la app real, esto llama al backend FastAPI. Aquí se muestra mock data.')}
+                style={{background:'var(--accent)',color:'#000',border:'none',borderRadius:8,
+                  padding:'10px 22px',fontSize:13,fontWeight:600,letterSpacing:'.04em'}}>
+                Analizar →
+              </button>
+            </div>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)}
+              placeholder="OWM API Key"
+              style={{width:280,background:'var(--surface2)',border:'1px solid var(--border2)',
+                borderRadius:8,padding:'9px 14px',color:'var(--muted)',fontSize:13,outline:'none'}}/>
+            <span style={{fontSize:11,color:'var(--muted2)'}}>
+              O configura <code style={{color:'var(--muted)'}}>OWM_API_KEY</code> en el backend
+            </span>
+          </div>
+        </div>
+
+        {/* Summary banner */}
+        <div className="fu fu2" style={{background:'linear-gradient(135deg,var(--surface),var(--surface2))',
+          border:'1px solid var(--border)',borderRadius:12,padding:'18px 22px',marginBottom:24,
+          display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:16,flexWrap:'wrap'}}>
+          <div>
+            <div style={{fontSize:10,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:6}}>
+              Resumen del análisis
+            </div>
+            <p style={{fontSize:13,lineHeight:1.65,maxWidth:660,color:'var(--text)'}}>{data.summary}</p>
+          </div>
+          <div style={{textAlign:'right',flexShrink:0}}>
+            <div style={{fontSize:10,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:5}}>
+              Mejor opción
+            </div>
+            <div style={{fontFamily:'var(--fh)',fontWeight:800,fontSize:24,
+              background:'linear-gradient(90deg,var(--accent),var(--accent2))',
+              WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>
+              {data.best_city}
+            </div>
+          </div>
+        </div>
+
+        {/* Charts */}
+        <div className="fu fu2" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
+          <RadarComp cities={data.results}/>
+          <ScoresBars cities={data.results}/>
+        </div>
+
+        {/* Table */}
+        <div className="fu fu3" style={{marginBottom:14}}>
+          <RankingTable cities={data.results}/>
+        </div>
+
+        {/* Cards */}
+        <div className="fu fu3" style={{display:'grid',
+          gridTemplateColumns:'repeat(auto-fill,minmax(290px,1fr))',gap:14,marginBottom:28}}>
+          {[...data.results].sort((a,b)=>b.operational_score-a.operational_score).map((city,i)=>(
+            <CityCard key={city.city_name} city={city} rank={i+1}
+              color={PALETTE[data.results.indexOf(city)%PALETTE.length]}
+              isBest={city.city_name===data.best_city}/>
+          ))}
+        </div>
+
+        {/* Methodology */}
+        <div style={{borderTop:'1px solid var(--border)',paddingTop:18,
+          fontSize:11,color:'var(--muted2)',lineHeight:1.8}}>
+          <strong style={{color:'var(--muted)'}}>Metodología:</strong>{' '}
+          <strong>Confort</strong> penaliza temp &gt;32°C / &lt;10°C, humedad &gt;80%, lluvia.{' '}
+          <strong>Estabilidad</strong> mide varianza de temperatura en 5 días.{' '}
+          <strong>Score Operacional</strong> = 50% Confort + 50% Estabilidad, con penalización adicional si llueve &gt;60% de los días.
+        </div>
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
